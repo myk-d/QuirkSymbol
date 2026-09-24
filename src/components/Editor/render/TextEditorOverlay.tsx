@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import type { BoardElement } from '../../../domain/board';
 import type { View } from '../../../domain/view';
 import { toScreen } from '../../../domain/view';
@@ -26,9 +26,28 @@ function measure(text: string, fontSize: number): { width: number; height: numbe
 export default function TextEditorOverlay({ element, view, onCommit, onCancel }: TextEditorOverlayProps) {
 	const ref = useRef<HTMLTextAreaElement | null>(null);
 
-	useEffect(() => {
+	const screen = toScreen(element.x, element.y, view);
+	const fontSize = (element.fontSize ?? 20) * view.scale;
+
+	// Той самий вимір (canvas `measureText`, по НАЙДОВШОМУ рядку між `\n`), що й `commit()` нижче —
+	// інакше textarea під час набору показує зовсім іншу картину, ніж те, що збережеться: попередня
+	// версія стискала textarea до 1px і читала `scrollWidth` звідти, тож рядок без явних `\n` (просто
+	// довгий безперервний текст) переносився на багато коротких рядків у самій textarea, хоча в
+	// `element.text` це один рядок — після збереження Konva малює його одним рядком, і виглядає так,
+	// ніби текст "стрибнув" в інший вигляд.
+	const applySize = (el: HTMLTextAreaElement) => {
+		const { width, height } = measure(el.value, fontSize);
+		el.style.width = `${width}px`;
+		el.style.height = `${height}px`;
+	};
+
+	// useLayoutEffect (не useEffect) — розмір застосовується ДО першого пофарбованого кадру, інакше
+	// при редагуванні вже довгого тексту на мить блимне стандартна ширина textarea (~20 символів).
+	useLayoutEffect(() => {
 		ref.current?.focus();
 		ref.current?.select();
+		if (ref.current) applySize(ref.current);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
 	const commit = () => {
@@ -37,13 +56,9 @@ export default function TextEditorOverlay({ element, view, onCommit, onCancel }:
 			onCancel();
 			return;
 		}
-		const fontSize = element.fontSize ?? 20;
-		const { width, height } = measure(value, fontSize);
+		const { width, height } = measure(value, element.fontSize ?? 20);
 		onCommit(value, width, height);
 	};
-
-	const screen = toScreen(element.x, element.y, view);
-	const fontSize = (element.fontSize ?? 20) * view.scale;
 
 	return (
 		<textarea
@@ -70,13 +85,7 @@ export default function TextEditorOverlay({ element, view, onCommit, onCancel }:
 					commit();
 				}
 			}}
-			onInput={(e) => {
-				const el = e.currentTarget;
-				el.style.width = '1px';
-				el.style.height = '1px';
-				el.style.width = `${el.scrollWidth}px`;
-				el.style.height = `${el.scrollHeight}px`;
-			}}
+			onInput={(e) => applySize(e.currentTarget)}
 		/>
 	);
 }

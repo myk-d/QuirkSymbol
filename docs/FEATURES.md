@@ -12,7 +12,7 @@
 | Eraser | ✅ Фаза 1 | Click/drag по фігурі → soft-delete |
 | Pan / zoom | ✅ Фаза 1 | Коліщатко + інструмент "Панорама" (`H`), `domain/view.ts` |
 | Multi-select (marquee, shift-click) | ✅ Фаза 1 | `BoardCanvas` |
-| Resize / rotate | ✅ Фаза 1 | Konva `Transformer`, лише для rectangle/ellipse/diamond у Фазі 1 |
+| **Resize / rotate** | ✅ Фаза 1, розширено пізніше | Konva `Transformer` — усі типи фігур (спершу лише rectangle/ellipse/diamond, `text`/`line`/`arrow`/`draw` додано пізніше за скаргою користувача на відсутні ручки), і одиночне, і групове (multi-select) виділення. Текст масштабує розмір шрифту, лінії/стрілки/малювання — координати `points`. Кадр і текст без обертання (структурні/редагування-через-HTML-оверлей обмеження) |
 | Undo / redo | ✅ Фаза 1 | `domain/history.ts`, commit-based стек |
 | Стиль (колір/заповнення/товщина/прозорість) | ✅ Фаза 1 | `PropertiesPanel.tsx`, обмежена палітра свотчів |
 | Duplicate / layering (наперед/назад) | ✅ Фаза 1 | — |

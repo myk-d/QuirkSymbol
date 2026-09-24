@@ -155,9 +155,29 @@ const ElementShape = forwardRef<Konva.Node, ElementShapeProps>(({ element: el, s
 			// `id` навмисно і на Group, і на дітях: клік влучає в дитину (Rect/Text) → потрібен їй id для
 			// виділення, а Transformer шукає вузол по id через `stage.findOne` — preorder-обхід віддає
 			// Group першою (вона предок), тож ручки трансформації рухають групу цілком, разом з підписом.
+			// Кастомний `hitFunc` замість fill — Konva хіт-тестить ВСЮ геометрію Rect незалежно від
+			// того, чи заданий `fill` (навіть без нього площа лишається "клікабельною"), тож заповнений
+			// (хай і невидимий) прямокутник перехоплював би кожен клік по фігурах усередині кадру, якщо
+			// кадр намальований/переміщений НАД ними (вищий zIndex). `strokeShape` реєструє хіт лише по
+			// контуру (`hitStrokeWidth` ширший за видиму лінію — зручніше влучити), а клік по внутрішній
+			// площі "провалюється" до фігури під кадром.
 			return (
 				<Group ref={ref as never} {...common} x={el.x} y={el.y}>
-					<Rect id={el.id} width={el.width} height={el.height} stroke={canvasTheme.frameStroke} strokeWidth={1.5} dash={[6, 4]} fill="transparent" />
+					<Rect
+						id={el.id}
+						width={el.width}
+						height={el.height}
+						stroke={canvasTheme.frameStroke}
+						strokeWidth={1.5}
+						dash={[6, 4]}
+						hitStrokeWidth={12}
+						hitFunc={(context, shape) => {
+							context.beginPath();
+							context.rect(0, 0, el.width, el.height);
+							context.closePath();
+							context.strokeShape(shape);
+						}}
+					/>
 					<KonvaText id={el.id} x={0} y={-20} text={el.text || 'Кадр'} fontSize={13} fontFamily="Inter, sans-serif" fill={canvasTheme.frameStroke} />
 				</Group>
 			);

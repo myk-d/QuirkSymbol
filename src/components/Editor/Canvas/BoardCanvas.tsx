@@ -22,7 +22,7 @@ import TextEditorOverlay from '../render/TextEditorOverlay';
 import { canvasTheme } from '../render/theme';
 import { useImageInsert } from '../useImageInsert';
 
-const TRANSFORMABLE = new Set(['rectangle', 'ellipse', 'diamond', 'frame', 'image', 'embed']);
+const TRANSFORMABLE = new Set(['rectangle', 'ellipse', 'diamond', 'frame', 'image', 'embed', 'text', 'line', 'arrow', 'draw']);
 /** Обгортка над `Date.now()` для лазерного сліду — виклик поза тілом компонента, щоб react-hooks/purity
  *  не сприймав його як нечисту функцію всередині рендеру (хендлери й так виконуються не під час рендеру,
  *  але лінтер аналізує лексичний скоуп). */
@@ -190,21 +190,20 @@ export default function BoardCanvas() {
 		// Щойно вставлене зображення ще не має Konva-вузла в перший момент — `useLoadedImage`
 		// вантажить `HTMLImageElement` асинхронно, і `ElementShape` рендерить null, поки не готово.
 		// Тож якщо `findOne` не знайшов вузол одразу, пробуємо ще кілька кадрів, а не здаємось миттєво.
+		// Працює і для одного, і для кількох виділених елементів одразу — Konva.Transformer нативно
+		// вміє показувати спільну рамку навколо кількох вузлів і масштабувати кожен пропорційно.
 		const attempt = (triesLeft: number) => {
 			if (cancelled) return;
-			if (tool === 'select' && selected.length === 1) {
-				const el = elements[selected[0]];
-				if (el && TRANSFORMABLE.has(el.type)) {
-					const node = stage.findOne(`#${el.id}`);
-					if (node) {
-						tr.nodes([node]);
-						tr.getLayer()?.batchDraw();
-						return;
-					}
-					if (triesLeft > 0) {
-						raf = requestAnimationFrame(() => attempt(triesLeft - 1));
-						return;
-					}
+			if (tool === 'select' && selected.length > 0 && selected.every((id) => elements[id] && TRANSFORMABLE.has(elements[id].type))) {
+				const nodes = selected.map((id) => stage.findOne(`#${id}`)).filter((n): n is Konva.Node => !!n);
+				if (nodes.length === selected.length) {
+					tr.nodes(nodes);
+					tr.getLayer()?.batchDraw();
+					return;
+				}
+				if (triesLeft > 0) {
+					raf = requestAnimationFrame(() => attempt(triesLeft - 1));
+					return;
 				}
 			}
 			tr.nodes([]);
@@ -448,26 +447,46 @@ export default function BoardCanvas() {
 		}
 	};
 
-	const onTransformStart = () => {
-		if (selected.length === 1) beginDrag(selected);
-	};
-
-	const onTransformEnd = () => {
-		const node = trRef.current?.nodes()[0];
-		const id = selected[0];
-		const el = id ? elements[id] : undefined;
-		if (!node || !el) return;
+	/** Рахує патч для ОДНОГО елемента після Transformer-жесту — застосовується і при одиночному, і при
+	 *  груповому resize/rotate (Konva сам коректно рахує x/y/scale/rotation для КОЖНОГО вузла з кількох,
+	 *  тож просто проганяємо кожен через ту саму логіку). */
+	const transformPatch = (el: BoardElement, node: Konva.Node): Partial<BoardElement> => {
 		const sx = node.scaleX();
 		const sy = node.scaleY();
 		node.scaleX(1);
 		node.scaleY(1);
+		const angle = node.rotation();
+
+		if (el.type === 'line' || el.type === 'arrow' || el.type === 'draw') {
+			// `points` — координати ВІДНОСНО x,y (не абсолютні), тож саме їх множимо на масштаб, а не
+			// перераховуємо як bounding box: інакше форма "стрибне" назад після скидання scale у 1.
+			const points = (el.points ?? []).map((p, i) => (i % 2 === 0 ? p * sx : p * sy));
+			return { x: node.x(), y: node.y(), points, width: Math.max(4, el.width * sx), height: Math.max(4, el.height * sy), angle };
+		}
+		if (el.type === 'text') {
+			// Текст не має незалежних width/height у звичному сенсі — ручка масштабує розмір шрифту
+			// (як в Excalidraw), а не "розтягує рамку" довкола того самого кегля.
+			const scale = (sx + sy) / 2;
+			return { x: node.x(), y: node.y(), fontSize: Math.max(6, Math.round((el.fontSize ?? 20) * scale)), angle };
+		}
 		const w = Math.max(4, el.width * sx);
 		const h = Math.max(4, el.height * sy);
-		const angle = node.rotation();
 		if (el.type === 'ellipse') {
-			updateElementLive(id, { x: node.x() - w / 2, y: node.y() - h / 2, width: w, height: h, angle });
-		} else {
-			updateElementLive(id, { x: node.x(), y: node.y(), width: w, height: h, angle });
+			return { x: node.x() - w / 2, y: node.y() - h / 2, width: w, height: h, angle };
+		}
+		return { x: node.x(), y: node.y(), width: w, height: h, angle };
+	};
+
+	const onTransformStart = () => {
+		if (selected.length > 0) beginDrag(selected);
+	};
+
+	const onTransformEnd = () => {
+		const nodes = trRef.current?.nodes() ?? [];
+		for (const node of nodes) {
+			const el = elements[node.id()];
+			if (!el) continue;
+			updateElementLive(el.id, transformPatch(el, node));
 		}
 		endDrag();
 	};
@@ -529,11 +548,20 @@ export default function BoardCanvas() {
 						ref={trRef}
 						onTransformStart={onTransformStart}
 						onTransformEnd={onTransformEnd}
-						// Кадр не можна обертати: `elementBounds`/`frameChildren`/snap/align усюди свідомо
-						// ігнорують `angle` (задокументовано в geometry.ts як спрощення MVP), тож обертання
-						// зламало б підбір "дітей" кадру, а `FrameLabelEditor` — HTML-інпут поверх Konva —
-						// теж не обертається разом з підписом. Простіше не дозволяти, ніж узгоджувати все це.
-						rotateEnabled={!selected.some((id) => elements[id]?.type === 'frame')}
+						// Кадр і текст не можна обертати: для кадру `elementBounds`/`frameChildren`/snap/align
+						// усюди свідомо ігнорують `angle` (задокументовано в geometry.ts як спрощення MVP), тож
+						// обертання зламало б підбір "дітей". Для обох — `FrameLabelEditor`/`TextEditorOverlay`,
+						// HTML-інпути поверх Konva, не повертаються разом з підписом/текстом при редагуванні.
+						// Простіше не дозволяти, ніж узгоджувати все це.
+						rotateEnabled={!selected.some((id) => ['frame', 'text'].includes(elements[id]?.type ?? ''))}
+						// Текст масштабується лише за кут (пропорційно, як розмір шрифту) — бокові ручки
+						// розтягували б превʼю нерівномірно під час самого драгу (до різкого "вирівнювання"
+						// при відпусканні), плутаючи користувача.
+						enabledAnchors={
+							selected.length > 0 && selected.every((id) => elements[id]?.type === 'text')
+								? ['top-left', 'top-right', 'bottom-left', 'bottom-right']
+								: undefined
+						}
 						borderStroke={canvasTheme.selectionStroke}
 						anchorStroke={canvasTheme.selectionStroke}
 						anchorFill="#ffffff"

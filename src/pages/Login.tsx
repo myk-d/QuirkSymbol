@@ -1,15 +1,14 @@
 import { Eye, EyeOff, Lock, Mail, PenTool, User } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import Button from '../components/UI/Button';
 import { UrlConfig } from '../constants/urls';
 import { useAuthStore } from '../store/useAuthStore';
-import Button from '../components/UI/Button';
 import { cn } from '../utils/cn';
 
 type Mode = 'signin' | 'signup' | 'reset';
 
-const inputClass =
-	'w-full rounded-md border border-panel-border bg-page-bg py-2 pr-3 pl-9 text-sm outline-none focus:border-brand';
+const inputClass = 'w-full rounded-md border border-panel-border bg-page-bg py-2 pr-3 pl-9 text-sm outline-none focus:border-brand';
 
 export default function Login() {
 	const { loginWithGoogle, loginWithEmail, signUpWithEmail, resetPassword, isLoggingIn } = useAuthStore();
@@ -41,12 +40,6 @@ export default function Login() {
 			<Button size="lg" variant="outline" onClick={loginWithGoogle} isLoading={isLoggingIn} className="w-full max-w-xs">
 				Увійти через Google
 			</Button>
-
-			<div className="flex w-full max-w-xs items-center gap-3 text-xs text-muted">
-				<div className="h-px flex-1 bg-panel-border" />
-				або поштою — зручно, якщо робоча пошта не в Google (напр. Microsoft)
-				<div className="h-px flex-1 bg-panel-border" />
-			</div>
 
 			<form onSubmit={submit} className="flex w-full max-w-xs flex-col gap-2.5 text-left">
 				{mode === 'signup' && (
