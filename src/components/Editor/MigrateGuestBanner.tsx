@@ -32,7 +32,7 @@ export default function MigrateGuestBanner({ hasContent }: MigrateGuestBannerPro
 	});
 	const [busy, setBusy] = useState(false);
 
-	if (!user || !user.emailVerified || !hasContent || dismissed) return null;
+	if (!user || !hasContent || dismissed) return null;
 
 	const dismiss = () => {
 		try {

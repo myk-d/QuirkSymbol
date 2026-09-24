@@ -20,7 +20,7 @@
 | **Дошка без входу (guest mode)** | ✅ Фаза 1 | Як excalidraw.com: `/` одразу відкриває канвас, зберігається в `localStorage` цього браузера (`useBoardStore.startGuestSession`, `services/localBoard.service.ts`) — без реєстрації |
 | **Командна співпраця в реальному часі** | ✅ Фаза 1 | Excalidraw+ фіча, доступна після входу. Firestore `onSnapshot` на `projects/{id}/elements`, документ на фігуру |
 | Доступ по email-запрошенню | ✅ Фаза 1 | Excalidraw+ фіча. `ProjectDoc.members` + Firestore rules |
-| **Вхід поштою/паролем (не лише Google)** | ✅ Фаза 3 | На прохання користувача — робочі пошти не завжди Google (напр. Microsoft). Реєстрація/вхід/відновлення пароля на `/login` (`useAuthStore.ts`), обов'язкове підтвердження пошти листом (`VerifyEmailNotice.tsx` — Firestore rules вимагають `email_verified`), Google лишається основним варіантом |
+| Вхід поштою/паролем (не лише Google) | ❌ Прибрано (Фаза 3.9 → відкат) | Додано на прохання користувача (робочі пошти не завжди Google), але лист підтвердження ненадійно доходив до корпоративних поштових скриньок (типова проблема Firebase Auth за замовчуванням із Microsoft 365/Exchange — спільний домен відправника без власного SPF/DKIM). Відкочено назад до лише Google — див. `PHASES.md` |
 | Плаваючий тулбар по центру зверху + хамбургер-меню | ✅ Фаза 1 | За зразком excalidraw.com (досліджено через Playwright): `Toolbar.tsx`, `HamburgerMenu.tsx` |
 | PNG-експорт | ✅ Фаза 1 | Хамбургер-меню → "Експортувати як PNG", обрізає по bounding box фігур, `Konva.Stage.toDataURL` |
 | Очистити полотно | ✅ Фаза 1 | Хамбургер-меню, з підтвердженням; скасовується через Ctrl+Z |
