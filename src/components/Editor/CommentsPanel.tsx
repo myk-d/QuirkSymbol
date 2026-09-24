@@ -1,4 +1,4 @@
-import { Check, MessageCircle, RotateCcw, Trash2, X } from 'lucide-react';
+import { Check, MessageCircle, RotateCcw, Send, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import type { CommentThread } from '../../domain/comment';
 import { useBoardStore } from '../../store/useBoardStore';
@@ -37,6 +37,9 @@ function Thread({ thread, active }: { thread: CommentThread; active: boolean }) 
 				))}
 			</button>
 
+			{/* Окремий рядок від resolve/delete нижче — раніше все стояло впритул в один рядок і клік по
+			    сусідній кнопці "вирішено" замість Enter тихо закривав тред, а набрана відповідь губилась
+			    (не було видимої кнопки відправки). */}
 			<div className="mt-2 flex items-center gap-1.5">
 				<input
 					value={reply}
@@ -45,6 +48,16 @@ function Thread({ thread, active }: { thread: CommentThread; active: boolean }) 
 					placeholder="Відповісти…"
 					className="min-w-0 flex-1 rounded-md border border-panel-border bg-page-bg px-2 py-1 text-xs outline-none focus:border-brand"
 				/>
+				<button
+					onClick={submitReply}
+					disabled={!reply.trim()}
+					title="Надіслати відповідь"
+					className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-brand hover:bg-page-bg disabled:opacity-30"
+				>
+					<Send className="h-3.5 w-3.5" />
+				</button>
+			</div>
+			<div className="mt-1.5 flex items-center justify-end gap-1.5">
 				<button
 					onClick={() => setCommentResolved(thread.id, !thread.resolved)}
 					title={thread.resolved ? 'Відкрити знову' : 'Позначити вирішеним'}

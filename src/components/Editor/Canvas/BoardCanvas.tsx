@@ -447,6 +447,10 @@ export default function BoardCanvas() {
 		}
 	};
 
+	/** Який якір Transformer тягнуть зараз — читається на старті жесту (`getActiveAnchor()` після
+	 *  завершення вже повертає null), потрібен лише для тексту (кут = кегль, бокова ручка = ширина). */
+	const activeAnchorRef = useRef<string | null>(null);
+
 	/** Рахує патч для ОДНОГО елемента після Transformer-жесту — застосовується і при одиночному, і при
 	 *  груповому resize/rotate (Konva сам коректно рахує x/y/scale/rotation для КОЖНОГО вузла з кількох,
 	 *  тож просто проганяємо кожен через ту саму логіку). */
@@ -464,10 +468,22 @@ export default function BoardCanvas() {
 			return { x: node.x(), y: node.y(), points, width: Math.max(4, el.width * sx), height: Math.max(4, el.height * sy), angle };
 		}
 		if (el.type === 'text') {
-			// Текст не має незалежних width/height у звичному сенсі — ручка масштабує розмір шрифту
-			// (як в Excalidraw), а не "розтягує рамку" довкола того самого кегля.
-			const scale = (sx + sy) / 2;
-			return { x: node.x(), y: node.y(), fontSize: Math.max(6, Math.round((el.fontSize ?? 20) * scale)), angle };
+			const textNode = node as Konva.Text;
+			const isEdgeResize = activeAnchorRef.current === 'middle-left' || activeAnchorRef.current === 'middle-right';
+			// Бокова ручка — лише ширина рамки переносу (fontSize не чіпаємо). Кутова — fontSize І
+			// ширина в одній пропорції (як фото при масштабуванні за кут): інакше глифи ростуть, а
+			// рамка лишається старою, і текст переноситься на нові рядки, хоча користувач хотів просто
+			// "більший той самий напис" (саме це й було баг-репортом).
+			const fontSize = isEdgeResize ? (el.fontSize ?? 20) : Math.max(6, Math.round((el.fontSize ?? 20) * ((sx + sy) / 2)));
+			const width = Math.max(20, isEdgeResize ? el.width * sx : el.width * ((sx + sy) / 2));
+			// Висота тексту завжди авто-рахується Konva з перенесених рядків (ми не задаємо `height`
+			// пропом) — щоб зберегти актуальне значення в сховищі (для marquee/align/snap, які беруть
+			// готовий `el.height`), напряму виставляємо нові fontSize/width на Konva-вузол і читаємо
+			// назад його реальну обчислену висоту, а не тримаємо стару застиглу з моменту створення.
+			textNode.fontSize(fontSize);
+			textNode.width(width);
+			const height = textNode.height();
+			return { x: node.x(), y: node.y(), fontSize, width, height, angle };
 		}
 		const w = Math.max(4, el.width * sx);
 		const h = Math.max(4, el.height * sy);
@@ -478,6 +494,7 @@ export default function BoardCanvas() {
 	};
 
 	const onTransformStart = () => {
+		activeAnchorRef.current = trRef.current?.getActiveAnchor() ?? null;
 		if (selected.length > 0) beginDrag(selected);
 	};
 
@@ -554,12 +571,13 @@ export default function BoardCanvas() {
 						// HTML-інпути поверх Konva, не повертаються разом з підписом/текстом при редагуванні.
 						// Простіше не дозволяти, ніж узгоджувати все це.
 						rotateEnabled={!selected.some((id) => ['frame', 'text'].includes(elements[id]?.type ?? ''))}
-						// Текст масштабується лише за кут (пропорційно, як розмір шрифту) — бокові ручки
-						// розтягували б превʼю нерівномірно під час самого драгу (до різкого "вирівнювання"
-						// при відпусканні), плутаючи користувача.
+						// Текст: кутові ручки масштабують розмір шрифту (пропорційно, як в Excalidraw), бокові
+						// ліва/права — лише ширину рамки переносу (`transformPatch` розрізняє через
+						// `getActiveAnchor()`). Верхня/нижня середні ручки прибрані — висота для тексту й так
+						// завжди авто-рахується з перенесених рядків, незалежний drag по ній нічого не значив.
 						enabledAnchors={
 							selected.length > 0 && selected.every((id) => elements[id]?.type === 'text')
-								? ['top-left', 'top-right', 'bottom-left', 'bottom-right']
+								? ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'middle-left', 'middle-right']
 								: undefined
 						}
 						borderStroke={canvasTheme.selectionStroke}
